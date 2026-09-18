@@ -23,8 +23,7 @@ from cce_bg import (  # noqa: E402
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
 P = [5000, 4600, 4200, 3800, 3400, 3000, 2600, 2200, 1800, 1400, 1000]
-Z = [0.9880, 0.9560, 0.9330, 0.9140, 0.8990, 0.8890, 0.8840,
-     0.8850, 0.8920, 0.9060, 0.9260]
+Z = [0.9880, 0.9560, 0.9330, 0.9140, 0.8990, 0.8890, 0.8840, 0.8850, 0.8920, 0.9060, 0.9260]
 T_F = 250.0
 
 
@@ -40,9 +39,7 @@ class TestBgFormula(unittest.TestCase):
         expected = 14.696 / (60.0 + 459.67) * 0.8890 * (250.0 + 459.67) / p
         self.assertAlmostEqual(cce.bg_at(p), expected, places=10)
         # 教科書の係数 0.02827 [ft3/scf] とも一致
-        self.assertAlmostEqual(
-            UNIT_SYSTEMS["field"].bg_coefficient, 0.02827, delta=1e-5
-        )
+        self.assertAlmostEqual(UNIT_SYSTEMS["field"].bg_coefficient, 0.02827, delta=1e-5)
 
     def test_eg_is_reciprocal_of_bg(self):
         cce = field_cce()
@@ -57,7 +54,7 @@ class TestBgFormula(unittest.TestCase):
     def test_bg_decreases_with_pressure(self):
         cce = field_cce()
         bg = [cce.bg_at(p) for p in range(1000, 5001, 250)]
-        self.assertTrue(all(a > b for a, b in zip(bg, bg[1:])))
+        self.assertTrue(all(a > b for a, b in zip(bg, bg[1:], strict=False)))
 
     def test_unit_systems_agree(self):
         """field と metric で同じ物理状態なら Bg が 0.3% 以内で一致すること。
@@ -79,22 +76,20 @@ class TestBgFormula(unittest.TestCase):
         units = UNIT_SYSTEMS["field"].with_standard(p_std=14.73)
         base = field_cce()
         custom = GasCCE(P, Z, T_F, units=units)
-        self.assertAlmostEqual(
-            custom.bg_at(3000.0) / base.bg_at(3000.0), 14.73 / 14.696, places=10
-        )
+        self.assertAlmostEqual(custom.bg_at(3000.0) / base.bg_at(3000.0), 14.73 / 14.696, places=10)
 
 
 class TestInterpolation(unittest.TestCase):
     def test_passes_through_data_points(self):
         cce = field_cce()
-        for p, z in zip(P, Z):
+        for p, z in zip(P, Z, strict=True):
             self.assertAlmostEqual(cce.z_at(p), z, places=12)
 
     def test_no_overshoot_between_points(self):
         """単調保存補間なので、隣り合う 2 点の値の外に出ないこと。"""
         cce = field_cce()
-        pairs = sorted(zip(P, Z))
-        for (p0, z0), (p1, z1) in zip(pairs, pairs[1:]):
+        pairs = sorted(zip(P, Z, strict=True))
+        for (p0, z0), (p1, z1) in zip(pairs, pairs[1:], strict=False):
             lo, hi = min(z0, z1), max(z0, z1)
             for k in range(1, 20):
                 z = cce.z_at(p0 + (p1 - p0) * k / 20.0)
@@ -143,17 +138,15 @@ class TestAlternativeInputs(unittest.TestCase):
     def test_relative_volume_round_trip(self):
         """相対体積から Z を復元できること。"""
         p_ref, z_ref = 4200.0, 0.9330
-        vrel = [(z / p) / (z_ref / p_ref) for p, z in zip(P, Z)]
-        cce = GasCCE.from_relative_volume(
-            P, vrel, T_F, z_ref=z_ref, p_ref=p_ref, units="field"
-        )
-        for p, z in zip(P, Z):
+        vrel = [(z / p) / (z_ref / p_ref) for p, z in zip(P, Z, strict=True)]
+        cce = GasCCE.from_relative_volume(P, vrel, T_F, z_ref=z_ref, p_ref=p_ref, units="field")
+        for p, z in zip(P, Z, strict=True):
             self.assertAlmostEqual(cce.z_at(p), z, places=10)
 
     def test_relative_volume_default_reference(self):
         """p_ref 省略時は V/Vsat = 1 の点が基準になること。"""
         p_ref, z_ref = 4200.0, 0.9330
-        vrel = [(z / p) / (z_ref / p_ref) for p, z in zip(P, Z)]
+        vrel = [(z / p) / (z_ref / p_ref) for p, z in zip(P, Z, strict=True)]
         cce = GasCCE.from_relative_volume(P, vrel, T_F, z_ref=z_ref, units="field")
         self.assertAlmostEqual(cce.z_at(3000.0), field_cce().z_at(3000.0), places=10)
 
@@ -161,7 +154,7 @@ class TestAlternativeInputs(unittest.TestCase):
         base = field_cce()
         bg = [base.bg_at(p) for p in P]
         cce = GasCCE.from_bg(P, bg, T_F, units="field")
-        for p, z in zip(P, Z):
+        for p, z in zip(P, Z, strict=True):
             self.assertAlmostEqual(cce.z_at(p), z, places=10)
             self.assertAlmostEqual(cce.bg_at(p), base.bg_at(p), places=12)
 
@@ -195,11 +188,7 @@ class TestCsv(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "cce.csv"
             path.write_text(
-                "Pressure,Z\n"
-                '"5,000",0.988\n'
-                "\n"
-                "3000,\n"
-                '"1,000",0.926\n',
+                'Pressure,Z\n"5,000",0.988\n\n3000,\n"1,000",0.926\n',
                 encoding="utf-8",
             )
             cce = GasCCE.from_csv(path, T_F, units="field")
@@ -238,22 +227,38 @@ class TestRowsAndCli(unittest.TestCase):
     def test_cli_range(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "out.csv"
-            code = main([
-                str(EXAMPLES / "cce_gas_field.csv"),
-                "-T", "250", "-u", "field",
-                "--range", "5000", "1000", "-500",
-                "--dew-point", "4200",
-                "-o", str(out),
-            ])
+            code = main(
+                [
+                    str(EXAMPLES / "cce_gas_field.csv"),
+                    "-T",
+                    "250",
+                    "-u",
+                    "field",
+                    "--range",
+                    "5000",
+                    "1000",
+                    "-500",
+                    "--dew-point",
+                    "4200",
+                    "-o",
+                    str(out),
+                ]
+            )
             self.assertEqual(code, 0)
             with out.open(encoding="utf-8") as fh:
                 rows = list(csv.reader(fh))
             self.assertEqual(len(rows), 10)  # ヘッダー + 9 点
 
     def test_cli_rejects_out_of_range_pressure(self):
-        code = main([
-            str(EXAMPLES / "cce_gas_field.csv"), "-T", "250", "-p", "9000",
-        ])
+        code = main(
+            [
+                str(EXAMPLES / "cce_gas_field.csv"),
+                "-T",
+                "250",
+                "-p",
+                "9000",
+            ]
+        )
         self.assertEqual(code, 2)
 
 

@@ -1,0 +1,7 @@
+# 開発用（テストとリンター）。実行時の依存も含めて一括で入ります。
+#
+#   python -m pip install -r requirements-dev.txt
+#
+-r requirements.txt
+pytest>=8.0
+ruff>=0.6

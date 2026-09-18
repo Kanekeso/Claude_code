@@ -1,0 +1,8 @@
+# cce_bg.py 本体は標準ライブラリだけで動くので、ここは「あると便利」な追加分です。
+# 表計算・作図・他ツールとの連携をするときにインストールしてください。
+#
+#   python -m pip install -r requirements.txt
+#
+numpy>=1.26
+pandas>=2.0
+matplotlib>=3.8

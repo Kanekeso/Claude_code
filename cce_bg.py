@@ -45,9 +45,9 @@ import csv
 import dataclasses
 import math
 import sys
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Sequence
 
 __all__ = [
     "UnitSystem",
@@ -86,9 +86,7 @@ class UnitSystem:
         """温度を絶対温度（degR / K）に変換する。"""
         t_abs = temperature - self.absolute_zero
         if t_abs <= 0.0:
-            raise ValueError(
-                f"絶対温度が正になりません: {temperature} {self.temperature_unit}"
-            )
+            raise ValueError(f"絶対温度が正になりません: {temperature} {self.temperature_unit}")
         return t_abs
 
     @property
@@ -100,9 +98,7 @@ class UnitSystem:
         """Bg = coefficient * z * T_abs / p の係数 (p_sc / T_sc)。"""
         return self.p_std / self.t_std_absolute
 
-    def with_standard(
-        self, p_std: float | None = None, t_std: float | None = None
-    ) -> "UnitSystem":
+    def with_standard(self, p_std: float | None = None, t_std: float | None = None) -> UnitSystem:
         """標準状態だけを差し替えた新しい単位系を返す。"""
         return dataclasses.replace(
             self,
@@ -155,7 +151,7 @@ UNIT_SYSTEMS: dict[str, UnitSystem] = {
 }
 
 
-def resolve_units(units: "str | UnitSystem") -> UnitSystem:
+def resolve_units(units: str | UnitSystem) -> UnitSystem:
     """単位系の名前または `UnitSystem` を `UnitSystem` に解決する。"""
     if isinstance(units, UnitSystem):
         return units
@@ -210,7 +206,7 @@ class MonotoneCubic:
                 f"extrapolation は 'error' / 'linear' / 'clamp' のいずれか: {extrapolation!r}"
             )
 
-        pairs = sorted(zip(x, y))
+        pairs = sorted(zip(x, y, strict=True))
         self.x = [float(a) for a, _ in pairs]
         self.y = [float(b) for _, b in pairs]
         self.extrapolation = extrapolation
@@ -220,9 +216,7 @@ class MonotoneCubic:
                 raise ValueError(f"x に重複があります: {self.x[i]}")
 
         self._h = [self.x[i + 1] - self.x[i] for i in range(len(self.x) - 1)]
-        self._delta = [
-            (self.y[i + 1] - self.y[i]) / self._h[i] for i in range(len(self.x) - 1)
-        ]
+        self._delta = [(self.y[i + 1] - self.y[i]) / self._h[i] for i in range(len(self.x) - 1)]
         self._d = self._slopes()
 
     def _slopes(self) -> list[float]:
@@ -310,8 +304,8 @@ class BgRow:
     pressure: float
     z: float
     bg: float
-    eg: float          # 1/Bg（ガス膨張係数 scf/ft3 など）
-    cg: float          # 等温圧縮率 1/p - (1/z)(dz/dp)
+    eg: float  # 1/Bg（ガス膨張係数 scf/ft3 など）
+    cg: float  # 等温圧縮率 1/p - (1/z)(dz/dp)
     extrapolated: bool = False
     two_phase: bool = False
 
@@ -347,7 +341,7 @@ class GasCCE:
         pressures: Sequence[float],
         z_factors: Sequence[float],
         reservoir_temperature: float,
-        units: "str | UnitSystem" = "field",
+        units: str | UnitSystem = "field",
         dew_point: float | None = None,
         extrapolation: str = "error",
         name: str = "",
@@ -362,7 +356,7 @@ class GasCCE:
             raise ValueError("pressures と z_factors の長さが一致しません")
         if len(pressures) < 2:
             raise ValueError("CCE 表には最低 2 点必要です")
-        for p, z in zip(pressures, z_factors):
+        for p, z in zip(pressures, z_factors, strict=True):
             if p <= 0.0:
                 raise ValueError(f"圧力は正である必要があります: {p}")
             if z <= 0.0:
@@ -380,7 +374,7 @@ class GasCCE:
         z_ref: float,
         p_ref: float | None = None,
         **kwargs,
-    ) -> "GasCCE":
+    ) -> GasCCE:
         """相対体積 V/Vsat から Z を復元して構築する。
 
         V = z n R T / p より、等温の CCE セル内では
@@ -409,9 +403,7 @@ class GasCCE:
             try:
                 idx = [float(p) for p in pressures].index(float(p_ref))
             except ValueError:
-                raise ValueError(
-                    f"p_ref={p_ref} が CCE 表の圧力点に見つかりません"
-                ) from None
+                raise ValueError(f"p_ref={p_ref} が CCE 表の圧力点に見つかりません") from None
 
         p_ref_v = float(pressures[idx])
         v_ref = float(relative_volumes[idx])
@@ -420,7 +412,7 @@ class GasCCE:
 
         z = [
             z_ref * (float(p) * float(v)) / (p_ref_v * v_ref)
-            for p, v in zip(pressures, relative_volumes)
+            for p, v in zip(pressures, relative_volumes, strict=True)
         ]
         return cls(pressures, z, reservoir_temperature, **kwargs)
 
@@ -430,31 +422,31 @@ class GasCCE:
         pressures: Sequence[float],
         bg_values: Sequence[float],
         reservoir_temperature: float,
-        units: "str | UnitSystem" = "field",
+        units: str | UnitSystem = "field",
         **kwargs,
-    ) -> "GasCCE":
+    ) -> GasCCE:
         """すでに Bg が与えられている表から構築する（内部では Z に戻す）。"""
         u = resolve_units(units)
         t_abs = u.absolute_temperature(float(reservoir_temperature))
         z = [
             float(bg) * float(p) / (u.bg_coefficient * t_abs)
-            for p, bg in zip(pressures, bg_values)
+            for p, bg in zip(pressures, bg_values, strict=True)
         ]
         return cls(pressures, z, reservoir_temperature, units=u, **kwargs)
 
     @classmethod
     def from_csv(
         cls,
-        path: "str | Path",
+        path: str | Path,
         reservoir_temperature: float,
-        units: "str | UnitSystem" = "field",
+        units: str | UnitSystem = "field",
         pressure_column: str | None = None,
         value_column: str | None = None,
         value_kind: str | None = None,
         z_ref: float | None = None,
         p_ref: float | None = None,
         **kwargs,
-    ) -> "GasCCE":
+    ) -> GasCCE:
         """CSV から構築する。
 
         ヘッダー名から列を自動判定する（大文字小文字・空白・記号は無視）。
@@ -470,19 +462,13 @@ class GasCCE:
         `value_column` と `value_kind`（``"z"`` / ``"vrel"`` / ``"bg"``）を
         明示すれば自動判定を上書きできる。相対体積の場合は `z_ref` が必須。
         """
-        pressures, values, kind = _read_cce_csv(
-            path, pressure_column, value_column, value_kind
-        )
+        pressures, values, kind = _read_cce_csv(path, pressure_column, value_column, value_kind)
         if kind == "z":
             return cls(pressures, values, reservoir_temperature, units=units, **kwargs)
         if kind == "bg":
-            return cls.from_bg(
-                pressures, values, reservoir_temperature, units=units, **kwargs
-            )
+            return cls.from_bg(pressures, values, reservoir_temperature, units=units, **kwargs)
         if z_ref is None:
-            raise ValueError(
-                "相対体積の列しかありません。基準点の Z を z_ref で指定してください。"
-            )
+            raise ValueError("相対体積の列しかありません。基準点の Z を z_ref で指定してください。")
         return cls.from_relative_volume(
             pressures,
             values,
@@ -588,7 +574,7 @@ class GasCCE:
             )
         return "\n".join(lines)
 
-    def write_csv(self, path: "str | Path", pressures: Iterable[float]) -> None:
+    def write_csv(self, path: str | Path, pressures: Iterable[float]) -> None:
         """計算結果を CSV に書き出す。"""
         u = self.units
         with open(path, "w", newline="", encoding="utf-8") as fh:
@@ -631,12 +617,26 @@ class GasCCE:
 # --------------------------------------------------------------------------
 _PRESSURE_KEYS = {"p", "pressure", "press", "pres", "圧力"}
 _Z_KEYS = {
-    "z", "zfactor", "zfactors", "gasz", "zgas", "twophasez", "singlephasez",
-    "deviationfactor", "gasdeviationfactor", "compressibilityfactor",
+    "z",
+    "zfactor",
+    "zfactors",
+    "gasz",
+    "zgas",
+    "twophasez",
+    "singlephasez",
+    "deviationfactor",
+    "gasdeviationfactor",
+    "compressibilityfactor",
 }
 _VREL_KEYS = {
-    "vrel", "vvsat", "vvd", "relativevolume", "relvol", "relativevol",
-    "relvolume", "相対体積",
+    "vrel",
+    "vvsat",
+    "vvd",
+    "relativevolume",
+    "relvol",
+    "relativevol",
+    "relvolume",
+    "相対体積",
 }
 _BG_KEYS = {"bg", "gasfvf", "fvf", "gasformationvolumefactor"}
 
@@ -665,7 +665,7 @@ def _match_column(normalized: dict[str, str], keys: set[str]) -> str | None:
 
 
 def _read_cce_csv(
-    path: "str | Path",
+    path: str | Path,
     pressure_column: str | None,
     value_column: str | None,
     value_kind: str | None,
@@ -700,9 +700,7 @@ def _read_cce_csv(
                 v_col, kind = col, kind_name
                 break
         else:
-            raise ValueError(
-                f"Z / Bg / 相対体積 のいずれの列も見つかりません。列: {fields}"
-            )
+            raise ValueError(f"Z / Bg / 相対体積 のいずれの列も見つかりません。列: {fields}")
 
     if kind not in ("z", "bg", "vrel"):
         raise ValueError(f"value_kind は 'z' / 'bg' / 'vrel': {kind!r}")
@@ -717,7 +715,9 @@ def _read_cce_csv(
             pressures.append(float(str(raw_p).replace(",", "")))
             values.append(float(str(raw_v).replace(",", "")))
         except ValueError:
-            raise ValueError(f"{path} の {i} 行目を数値に変換できません: {raw_p}, {raw_v}") from None
+            raise ValueError(
+                f"{path} の {i} 行目を数値に変換できません: {raw_p}, {raw_v}"
+            ) from None
 
     if len(pressures) < 2:
         raise ValueError(f"{path} から有効なデータ点を 2 点以上読み取れませんでした")
@@ -727,9 +727,7 @@ def _read_cce_csv(
 # --------------------------------------------------------------------------
 # CLI
 # --------------------------------------------------------------------------
-def _parse_pressure_args(
-    values: list[float] | None, rng: list[float] | None
-) -> list[float]:
+def _parse_pressure_args(values: list[float] | None, rng: list[float] | None) -> list[float]:
     pressures: list[float] = list(values or [])
     if rng:
         start, stop, step = rng
@@ -754,19 +752,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         "-T", "--temperature", type=float, required=True, help="貯留層温度（CCE 試験温度）"
     )
     parser.add_argument(
-        "-u", "--units", default="field",
-        choices=sorted(UNIT_SYSTEMS), help="単位系（既定: field）",
+        "-u",
+        "--units",
+        default="field",
+        choices=sorted(UNIT_SYSTEMS),
+        help="単位系（既定: field）",
     )
     parser.add_argument(
         "-p", "--pressure", type=float, action="append", help="計算する圧力（複数指定可）"
     )
     parser.add_argument(
-        "--range", type=float, nargs=3, metavar=("START", "STOP", "STEP"),
+        "--range",
+        type=float,
+        nargs=3,
+        metavar=("START", "STOP", "STEP"),
         help="等間隔の圧力列（例: --range 5000 1000 -500）",
     )
     parser.add_argument("--dew-point", type=float, help="露点圧力（2 相領域のフラグ用）")
     parser.add_argument(
-        "--extrapolation", default="error", choices=["error", "linear", "clamp"],
+        "--extrapolation",
+        default="error",
+        choices=["error", "linear", "clamp"],
         help="データ範囲外の扱い（既定: error）",
     )
     parser.add_argument("--z-ref", type=float, help="相対体積入力のときの基準 Z")

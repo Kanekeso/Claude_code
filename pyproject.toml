@@ -1,0 +1,22 @@
+[project]
+name = "cce-bg"
+version = "0.1.0"
+description = "CCE（定組成膨張試験）の結果から任意圧力の Bg を計算する"
+requires-python = ">=3.10"
+dependencies = []  # 本体は標準ライブラリのみ
+
+[project.optional-dependencies]
+analysis = ["numpy>=1.26", "pandas>=2.0", "matplotlib>=3.8"]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "cce_bg.py"]
+addopts = "--doctest-modules"
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4"]

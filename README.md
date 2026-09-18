@@ -121,12 +121,83 @@ field と metric で Bg の値が 0.2 % ほどずれるのは、標準状態の�
 - CSV の空欄行は読み飛ばします（露点未満で single-phase Z が空欄の
   レポートをそのまま読めます）。
 
+## 環境構築（VS Code / ローカル）
+
+`cce_bg.py` 本体は標準ライブラリだけで動くので、**何もインストールしなくても実行できます**。
+numpy などを併用したい場合や、テスト・リンターを動かす場合だけ以下を行ってください。
+
+### 1. リポジトリを取得する
+
+```bash
+git clone https://github.com/Kanekeso/Claude_code.git
+cd Claude_code
+git checkout claude/cce-bg-pressure-calculation-ef9xp3
+```
+
+### 2. 仮想環境を作って有効化する
+
+プロジェクトごとに `.venv` を作るのが VS Code の標準的な進め方です。
+
+```bash
+# macOS / Linux
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Windows (PowerShell)
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+VS Code では `Ctrl+Shift+P` →「Python: Select Interpreter」で `.venv` を選びます
+（`.vscode/settings.json` で既定の解釈系を `.venv` に向けてあるので、通常は自動で選ばれます）。
+
+### 3. パッケージをインストールする
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt   # numpy / pandas / matplotlib / pytest / ruff
+```
+
+numpy だけで十分なら `python -m pip install numpy` でも構いません。
+新しくパッケージを追加したら `requirements.txt` にも書き足しておくと、
+他の環境やこのリポジトリの Web セッションでも同じ構成を再現できます。
+
+> **注意**: `pip install` は必ず有効化した `.venv` の中で実行してください。
+> `python -m pip ...` の形で呼ぶと、いま選んでいる Python に確実に入ります。
+
+### 4. 動作確認
+
+```bash
+python -m pytest              # テスト（28 件）
+python -m ruff check .        # リンター
+python -m ruff format .       # フォーマッタ
+```
+
+### Claude Code on the web で使う場合
+
+`.claude/hooks/session-start.sh` を用意してあるので、Web セッションの開始時に
+`requirements-dev.txt` が自動でインストールされます（ローカル実行時は何もしません）。
+このフックが効くのは、**変更をリポジトリの既定ブランチにマージした後**の
+セッションからです。
+
+## 変更をコミットする
+
+```bash
+git add -A
+git commit -m "変更内容の要約"
+git push -u origin claude/cce-bg-pressure-calculation-ef9xp3
+```
+
+`.gitignore` で `__pycache__/` と `.venv/` は除外済みなので、
+`git add -A` しても仮想環境そのものはコミットされません。
+
 ## テスト
 
 ```bash
-python -m unittest discover -s tests -v
+python -m pytest                        # pytest を入れている場合
+python -m unittest discover -s tests    # 追加インストールなしで実行する場合
 ```
 
 Bg の式の手計算照合、補間がデータ点を通ること、オーバーシュートしないこと、
-相対体積 / Bg からの往復変換、単位系の整合、CSV 読み込み、CLI までを
-28 件で検証しています。
+相対体積 / Bg からの往復変換、単位系の整合、CSV 読み込み、CLI、docstring の
+使用例（doctest）までを 28 件で検証しています。
